@@ -3,8 +3,6 @@ import React, { useState, useRef } from 'react';
 import { InstagramAnalysis, AnalysisStatus } from './types';
 import { performAnalysis } from './services/geminiService';
 import ComparisonChart from './components/ComparisonChart';
-// @ts-ignore
-import html2pdf from 'html2pdf.js';
 
 const App: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -12,6 +10,7 @@ const App: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [analysis, setAnalysis] = useState<InstagramAnalysis | null>(null);
   const [activeTab, setActiveTab] = useState<'info' | 'content' | 'competitors' | 'diagnosis' | 'proposal'>('info');
+  const [errorMessage, setErrorMessage] = useState('');
   
   const fullReportRef = useRef<HTMLDivElement>(null);
 
@@ -19,16 +18,16 @@ const App: React.FC = () => {
     e.preventDefault();
     if (!username) return;
     
-    const cleanUsername = username.replace('@', '').trim();
+    setErrorMessage('');
     setStatus('searching');
     
     try {
-      setTimeout(() => setStatus('analyzing'), 2000);
-      const result = await performAnalysis(cleanUsername);
+      const result = await performAnalysis(username);
       setAnalysis(result);
       setStatus('completed');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
+      setErrorMessage(error.message || 'Ocurrió un error inesperado al buscar el perfil.');
       setStatus('error');
     }
   };
@@ -38,38 +37,24 @@ const App: React.FC = () => {
     
     setIsExporting(true);
     
-    // Solución al error "x is not a function": Asegurar que llamamos a la función correcta de la librería
-    const exporter = (html2pdf as any).default || html2pdf;
-    
-    if (typeof exporter !== 'function') {
-      console.error("La librería html2pdf no se cargó como una función.");
-      setIsExporting(false);
-      return;
-    }
-
-    const element = fullReportRef.current;
-    
-    const opt = {
-      margin: [10, 10, 10, 10],
-      filename: `Reporte_ANI_${analysis.basicInfo.businessName || analysis.basicInfo.handle}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true,
-        logging: false,
-        letterRendering: true,
-        windowWidth: 1200 // Asegura un ancho consistente para el renderizado del PDF
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
-
     try {
-      // Forzamos un breve delay para asegurar que el DOM oculto esté listo
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await exporter().set(opt).from(element).save();
+      // Importación dinámica robusta para html2pdf
+      const html2pdfModule = await import('https://esm.sh/html2pdf.js@0.10.1');
+      const html2pdf = html2pdfModule.default;
+      
+      const element = fullReportRef.current;
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `Reporte_ANI_${analysis.basicInfo.businessName.replace(/\s+/g, '_')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      await html2pdf().set(opt).from(element).save();
     } catch (error) {
       console.error("Error generating PDF:", error);
+      alert("No se pudo generar el PDF. Por favor, inténtalo de nuevo.");
     } finally {
       setIsExporting(false);
     }
@@ -83,147 +68,91 @@ const App: React.FC = () => {
     }
   };
 
-  const renderValue = (value: any, fallback: string = "No se encontró información") => {
+  const renderValue = (value: any, fallback: string = "No disponible") => {
     if (!value || (Array.isArray(value) && value.length === 0)) {
       return <span className="text-slate-400 italic">{fallback}</span>;
     }
-    if (Array.isArray(value)) {
-      return value.join(', ');
-    }
+    if (Array.isArray(value)) return value.join(', ');
     return value;
   };
 
-  // Componente interno para evitar duplicar código en UI y PDF
   const ReportSections = ({ isPdf = false }: { isPdf?: boolean }) => {
     if (!analysis) return null;
 
     return (
       <div className={`space-y-12 ${isPdf ? 'p-4 bg-white' : ''}`}>
-        {/* SECCIÓN 1: INFORMACIÓN BÁSICA (Siempre visible en PDF o si es su tab) */}
         {(isPdf || activeTab === 'info') && (
-          <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm overflow-hidden relative break-inside-avoid">
-            <div className="absolute top-0 right-0 p-4 opacity-5">
-              <span className="text-6xl font-black">01</span>
-            </div>
+          <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm relative break-inside-avoid">
             <h3 className="text-2xl font-bold text-blue-900 mb-8 flex items-center gap-3">
-              <span className="bg-blue-600 text-white w-10 h-10 flex items-center justify-center rounded-xl shadow-lg">📄</span>
-              Entregable: Diagnóstico de Perfil
+              <span className="bg-blue-600 text-white w-10 h-10 flex items-center justify-center rounded-xl">📄</span>
+              Diagnóstico del Perfil
             </h3>
-            <div className="space-y-8">
+            <div className="space-y-6">
               {[
-                { n: 1, label: "Nombre del Negocio / Perfil", val: renderValue(analysis.basicInfo.businessName || analysis.basicInfo.handle) },
-                { n: 2, label: "Tipo / Categoría de Negocio", val: renderValue(analysis.basicInfo.category) },
-                { n: 3, label: "Descripción del Negocio (Biografía)", val: renderValue(analysis.basicInfo.bio), italic: true },
-              ].map(item => (
-                <div key={item.n} className="flex gap-6 border-b border-slate-50 pb-4">
-                  <div className="text-blue-600 font-bold text-xl min-w-[30px]">{item.n}</div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{item.label}</label>
-                    <p className={`text-slate-800 ${item.n === 1 ? 'text-lg font-bold' : 'font-medium'} ${item.italic ? 'italic' : ''}`}>{item.val}</p>
-                  </div>
+                { label: "Nombre del Negocio", val: analysis.basicInfo.businessName },
+                { label: "Categoría", val: analysis.basicInfo.category },
+                { label: "Biografía", val: analysis.basicInfo.bio, italic: true },
+                { label: "Ubicación", val: analysis.basicInfo.location },
+                { label: "Propuesta de Valor", val: analysis.basicInfo.uniqueValueProp },
+              ].map((item, idx) => (
+                <div key={idx} className="border-b border-slate-50 pb-4">
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">{item.label}</label>
+                  <p className={`text-slate-800 font-medium ${item.italic ? 'italic' : ''}`}>{renderValue(item.val)}</p>
                 </div>
               ))}
-              <div className="flex gap-6 border-b border-slate-50 pb-4">
-                <div className="text-blue-600 font-bold text-xl min-w-[30px]">4</div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Servicios Principales (Contenido)</label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {analysis.basicInfo.services.length > 0 ? (
-                      analysis.basicInfo.services.map((s, i) => (
-                        <span key={i} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-sm font-semibold border border-blue-100">{s}</span>
-                      ))
-                    ) : <p className="text-slate-400 italic">No se encontró información</p>}
-                  </div>
-                </div>
-              </div>
-              {[
-                { n: 5, label: "Ubicación del Negocio", val: renderValue(analysis.basicInfo.location) },
-                { n: 6, label: "Audiencia Objetivo (Perfil Demográfico)", val: renderValue(analysis.basicInfo.targetAudience) },
-              ].map(item => (
-                <div key={item.n} className="flex gap-6 border-b border-slate-50 pb-4">
-                  <div className="text-blue-600 font-bold text-xl min-w-[30px]">{item.n}</div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{item.label}</label>
-                    <p className="text-slate-700">{item.val}</p>
-                  </div>
-                </div>
-              ))}
-              <div className="flex gap-6 border-b border-slate-50 pb-4">
-                <div className="text-blue-600 font-bold text-xl min-w-[30px]">7</div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Propuesta de Valor Única / Diferenciadores</label>
-                  <p className="text-slate-700 font-medium p-4 bg-slate-50 rounded-xl border-l-4 border-blue-500">{renderValue(analysis.basicInfo.uniqueValueProp)}</p>
-                </div>
-              </div>
-              <div className="flex gap-6 border-b border-slate-50 pb-4">
-                <div className="text-blue-600 font-bold text-xl min-w-[30px]">8</div>
-                <div className="flex-1">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Datos de Contacto</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                      <span className="text-blue-500">📞</span>
-                      <span className="text-sm font-medium">{renderValue(analysis.basicInfo.contact.phone)}</span>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                      <span className="text-blue-500">📧</span>
-                      <span className="text-sm font-medium truncate">{renderValue(analysis.basicInfo.contact.email)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-6">
-                <div className="text-blue-600 font-bold text-xl min-w-[30px]">9</div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Sitio Web Oficial</label>
-                  <p className="text-blue-600 font-bold text-lg">{renderValue(analysis.basicInfo.contact.website)}</p>
-                </div>
+              <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Sitio Web</label>
+                    <p className="text-blue-600 font-bold truncate">{renderValue(analysis.basicInfo.contact.website)}</p>
+                 </div>
+                 <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Teléfono</label>
+                    <p className="text-slate-800 font-bold">{renderValue(analysis.basicInfo.contact.phone)}</p>
+                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* SECCIÓN 2: ANÁLISIS DE CONTENIDO */}
         {(isPdf || activeTab === 'content') && (
           <div className="space-y-6 break-inside-avoid">
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
-                <p className="text-sm font-medium text-slate-400 uppercase mb-2">Engagement</p>
-                <p className={`text-2xl font-bold ${analysis.contentMetrics.engagementLevel === 'Alto' ? 'text-emerald-600' : 'text-amber-600'}`}>{analysis.contentMetrics.engagementLevel}</p>
-              </div>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
-                <p className="text-sm font-medium text-slate-400 uppercase mb-2">Frecuencia</p>
-                <p className="text-2xl font-bold text-slate-800">{analysis.contentMetrics.postFrequency}</p>
-              </div>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
-                <p className="text-sm font-medium text-slate-400 uppercase mb-2">Consistencia</p>
-                <p className="text-2xl font-bold text-blue-600">{analysis.contentMetrics.brandConsistency}/10</p>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-bold text-slate-800 mb-6">Mix de Contenido</h3>
-              <div className="space-y-4">
-                {analysis.contentMetrics.contentTypes.map((ct, i) => (
-                  <div key={i}>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-medium text-slate-700">{ct.type}</span>
-                      <span className="text-sm font-bold text-blue-600">{ct.percentage}%</span>
+             <div className="grid grid-cols-3 gap-4">
+                <div className="bg-white p-4 rounded-xl border border-slate-100 text-center">
+                   <p className="text-xs text-slate-400 uppercase font-bold">Engagement</p>
+                   <p className="text-xl font-bold text-blue-600">{analysis.contentMetrics.engagementLevel}</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-100 text-center">
+                   <p className="text-xs text-slate-400 uppercase font-bold">Frecuencia</p>
+                   <p className="text-xl font-bold text-slate-800">{analysis.contentMetrics.postFrequency}</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-100 text-center">
+                   <p className="text-xs text-slate-400 uppercase font-bold">Consistencia</p>
+                   <p className="text-xl font-bold text-blue-600">{analysis.contentMetrics.brandConsistency}/10</p>
+                </div>
+             </div>
+             <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
+                <h3 className="text-xl font-bold text-slate-800 mb-6">Mix de Contenido</h3>
+                <div className="space-y-4">
+                  {analysis.contentMetrics.contentTypes.map((ct, i) => (
+                    <div key={i}>
+                      <div className="flex justify-between mb-1">
+                        <span className="text-sm font-medium text-slate-700">{ct.type}</span>
+                        <span className="text-sm font-bold text-blue-600">{ct.percentage}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${ct.percentage}%` }}></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2">
-                      <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${ct.percentage}%` }}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+                  ))}
+                </div>
+             </div>
           </div>
         )}
 
-        {/* SECCIÓN 3: COMPETENCIA */}
         {(isPdf || activeTab === 'competitors') && (
           <div className="space-y-6 break-inside-avoid">
             <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-bold text-slate-800 mb-6">Benchmark vs Competencia (Analizado por ANI)</h3>
-              {/* Nota: Los gráficos de Recharts a veces requieren dimensiones fijas en PDF */}
+              <h3 className="text-xl font-bold text-slate-800 mb-6">Benchmark de Competencia</h3>
               <div style={isPdf ? { width: '700px', height: '400px', margin: '0 auto' } : {}}>
                 <ComparisonChart competitors={analysis.competitors} businessName={analysis.basicInfo.businessName} />
               </div>
@@ -231,17 +160,16 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* SECCIÓN 4: DIAGNÓSTICO */}
         {(isPdf || activeTab === 'diagnosis') && (
           <div className="space-y-6 break-inside-avoid">
             <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
-              <h3 className="text-xl font-bold text-slate-800 mb-6">Oportunidades Prioritarias Identificadas</h3>
+              <h3 className="text-xl font-bold text-slate-800 mb-6">Oportunidades de Mejora</h3>
               <div className="space-y-4">
                 {analysis.diagnosis.opportunities.map((opp, i) => (
                   <div key={i} className={`p-5 rounded-2xl border ${getPriorityColor(opp.priority)}`}>
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="font-bold text-lg">{opp.area}</h4>
-                      <span className="text-xs font-bold px-2 py-1 rounded-full uppercase tracking-tighter">Prioridad {opp.priority}</span>
+                      <span className="text-xs font-bold px-2 py-1 rounded-full uppercase">Prioridad {opp.priority}</span>
                     </div>
                     <p className="text-sm opacity-90">{opp.advice}</p>
                   </div>
@@ -251,40 +179,25 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* SECCIÓN 5: PROPUESTA GROWTH */}
         {(isPdf || activeTab === 'proposal') && (
           <div className="space-y-8 break-inside-avoid">
-            <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600 transform translate-x-16 -translate-y-16 rotate-45 opacity-10"></div>
-              <h3 className="text-2xl font-bold text-blue-900 mb-6">Propuesta Growth de ANI</h3>
-              <p className="text-slate-600 mb-8 leading-relaxed italic border-l-4 border-blue-600 pl-4">
+            <div className="bg-blue-900 text-white rounded-2xl p-8 relative overflow-hidden">
+              <h3 className="text-2xl font-bold mb-6">Propuesta Growth de ANI</h3>
+              <p className="mb-8 leading-relaxed italic opacity-90 border-l-4 border-blue-400 pl-4">
                 {analysis.commercialProposal.introduction}
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+              <div className="grid grid-cols-2 gap-6">
                 {[
-                  { icon: '🌐', title: 'Ecosistema Web', desc: analysis.commercialProposal.solution.webDesign },
-                  { icon: '🤖', title: 'IA & Automatización', desc: analysis.commercialProposal.solution.chatbot },
-                  { icon: '📅', title: 'Agendamiento', desc: analysis.commercialProposal.solution.bookingSystem },
-                  { icon: '📱', title: 'Optimización Social', desc: analysis.commercialProposal.solution.socialOptimization },
+                  { title: 'Ecosistema Web', desc: analysis.commercialProposal.solution.webDesign },
+                  { title: 'Automatización', desc: analysis.commercialProposal.solution.chatbot },
+                  { title: 'Agendamiento', desc: analysis.commercialProposal.solution.bookingSystem },
+                  { title: 'Optimización', desc: analysis.commercialProposal.solution.socialOptimization },
                 ].map((item, idx) => (
-                  <div key={idx} className="p-6 bg-slate-50 rounded-2xl border border-slate-200">
-                    <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                      <span className="text-blue-600">{item.icon}</span> {item.title}
-                    </h4>
-                    <p className="text-sm text-slate-600">{item.desc}</p>
+                  <div key={idx} className="p-4 bg-white/10 rounded-xl backdrop-blur-sm">
+                    <h4 className="font-bold mb-2 text-blue-300">{item.title}</h4>
+                    <p className="text-xs opacity-80">{item.desc}</p>
                   </div>
                 ))}
-              </div>
-              <div className="bg-blue-50 p-8 rounded-3xl border border-blue-100">
-                <h4 className="text-center font-bold text-blue-900 mb-6 uppercase tracking-widest text-sm">Resultados Proyectados con ANI</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {analysis.commercialProposal.projectedBenefits.map((benefit, i) => (
-                    <div key={i} className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
-                      <span className="font-medium text-slate-700">{benefit.metric}</span>
-                      <span className="text-blue-600 font-bold text-lg">+{benefit.improvement}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -295,14 +208,12 @@ const App: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-      {/* Header & Hero */}
       <header className="text-center mb-12 no-print">
-        <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 text-white text-4xl font-black rounded-3xl shadow-xl mb-6 shadow-blue-200 rotate-3">ANI</div>
+        <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 text-white text-4xl font-black rounded-3xl shadow-xl mb-6 rotate-3">ANI</div>
         <h1 className="text-4xl font-extrabold text-blue-900 mb-2">Asistente de Negocios Inteligentes</h1>
-        <p className="text-xl font-medium text-blue-600 mb-4 italic">Expande tu alcance, Aumenta tus ventas con ANI</p>
+        <p className="text-xl font-medium text-blue-600 italic">Análisis profesional de perfiles para escalar tus ventas</p>
       </header>
 
-      {/* Input Section */}
       <section className="bg-white rounded-2xl shadow-xl p-8 mb-12 border border-slate-100 max-w-3xl mx-auto no-print">
         <form onSubmit={handleAnalyze} className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-grow">
@@ -311,64 +222,48 @@ const App: React.FC = () => {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="usuario_negocio"
-              className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              placeholder="Ej: apple o https://instagram.com/apple"
+              className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
               disabled={status === 'searching' || status === 'analyzing'}
             />
           </div>
           <button
             type="submit"
             disabled={status === 'searching' || status === 'analyzing' || !username}
-            className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-200"
+            className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl transition shadow-lg"
           >
-            {status === 'searching' ? 'Buscando...' : status === 'analyzing' ? 'Analizando...' : 'Iniciar Análisis con ANI'}
+            {status === 'searching' || status === 'analyzing' ? 'Buscando perfil...' : 'Analizar Perfil'}
           </button>
         </form>
-
-        {(status === 'searching' || status === 'analyzing') && (
-          <div className="mt-8">
-            <div className="flex justify-between mb-2">
-              <span className="text-sm font-medium text-blue-700">
-                {status === 'searching' ? 'ANI está recopilando datos de @' + username : 'ANI procesando métricas e insights...'}
-              </span>
-              <span className="text-sm font-medium text-blue-700">{status === 'searching' ? '35%' : '75%'}</span>
-            </div>
-            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-              <div className={`bg-blue-600 h-2 transition-all duration-1000 ${status === 'searching' ? 'w-1/3' : 'w-3/4'}`}></div>
-            </div>
-          </div>
+        {status === 'searching' && (
+           <div className="mt-4 flex items-center justify-center gap-3 text-blue-600 font-medium animate-pulse">
+              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              ANI está escaneando la web para encontrar el perfil...
+           </div>
         )}
       </section>
 
       {analysis && status === 'completed' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-          
-          {/* Dashboard Summary Score (Solo UI) */}
-          <div className="bg-blue-900 text-white rounded-2xl p-8 mb-8 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl no-print">
-            <div className="flex-1">
-              <h2 className="text-2xl font-bold mb-2">Puntuación de Salud Digital por ANI: {analysis.diagnosis.overallScore}/10</h2>
-              <p className="text-blue-100 opacity-90 leading-relaxed italic">"{analysis.diagnosis.executiveSummary}"</p>
+          <div className="bg-blue-900 text-white rounded-2xl p-8 mb-8 flex items-center justify-between no-print">
+            <div>
+              <h2 className="text-2xl font-bold mb-2">Salud Digital: {analysis.diagnosis.overallScore}/10</h2>
+              <p className="text-blue-100 italic opacity-90 max-w-2xl">"{analysis.diagnosis.executiveSummary}"</p>
             </div>
-            <div className="flex flex-col items-center">
-              <div className="relative w-32 h-32 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90">
-                  <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-blue-800" />
-                  <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={364} strokeDashoffset={364 - (364 * analysis.diagnosis.overallScore / 10)} className="text-emerald-400 transition-all duration-1000" />
-                </svg>
-                <span className="absolute text-4xl font-bold">{analysis.diagnosis.overallScore}</span>
-              </div>
-              <span className="mt-2 font-medium tracking-wide uppercase text-sm text-blue-200">Rendimiento General</span>
+            <div className="hidden md:block">
+               <div className="w-24 h-24 border-8 border-blue-400 border-t-emerald-400 rounded-full flex items-center justify-center text-3xl font-bold">
+                  {analysis.diagnosis.overallScore}
+               </div>
             </div>
           </div>
 
-          {/* Navigation Tabs (Solo UI) */}
           <div className="flex overflow-x-auto pb-4 gap-2 mb-8 no-scrollbar no-print">
             {[
-              { id: 'info', label: 'Información Básica', icon: '👤' },
-              { id: 'content', label: 'Análisis de Contenido', icon: '📊' },
-              { id: 'competitors', label: 'Competencia', icon: '⚔️' },
-              { id: 'diagnosis', label: 'Plan de Mejora', icon: '🚀' },
-              { id: 'proposal', label: 'Propuesta Growth', icon: '💼' }
+              { id: 'info', label: 'Info Perfil', icon: '👤' },
+              { id: 'content', label: 'Contenido', icon: '📊' },
+              { id: 'competitors', label: 'Benchmark', icon: '⚔️' },
+              { id: 'diagnosis', label: 'Mejoras', icon: '🚀' },
+              { id: 'proposal', label: 'Estrategia', icon: '💼' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -382,85 +277,62 @@ const App: React.FC = () => {
             ))}
           </div>
 
-          {/* Main Content Area */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-8 no-print">
                <ReportSections />
             </div>
 
-            {/* Sidebar (Solo UI) */}
             <div className="lg:col-span-4 space-y-6 no-print">
               <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm sticky top-8">
-                <h4 className="font-bold text-slate-800 mb-4 uppercase text-xs tracking-widest">Canales de Contacto</h4>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-blue-600">📞</span>
-                    <span className="text-sm font-medium text-slate-700">{renderValue(analysis.basicInfo.contact.phone)}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-blue-600">📧</span>
-                    <span className="text-sm font-medium text-slate-700 truncate">{renderValue(analysis.basicInfo.contact.email)}</span>
-                  </div>
+                <h4 className="font-bold text-slate-800 mb-4 uppercase text-xs tracking-widest">Fuentes de Datos</h4>
+                <div className="space-y-3 mb-8">
+                  {analysis.sources.map((source, i) => (
+                    <a key={i} href={source.uri} target="_blank" rel="noreferrer" className="block text-xs text-blue-500 hover:underline truncate">
+                      • {source.title}
+                    </a>
+                  ))}
                 </div>
-                <div className="mt-8">
-                  <button 
-                    onClick={handleDownloadPDF} 
-                    disabled={isExporting}
-                    className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
-                  >
-                    {isExporting ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    ) : "Descargar Informe PDF Completo"}
-                  </button>
-                </div>
+                <button 
+                  onClick={handleDownloadPDF} 
+                  disabled={isExporting}
+                  className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2"
+                >
+                  {isExporting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : "Descargar Reporte PDF"}
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Oculto: Contenedor para generación de PDF con TODO el contenido */}
+          {/* PDF EXPORT CONTENT */}
           <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
-            <div ref={fullReportRef} style={{ width: '800px', backgroundColor: '#fff', padding: '20px' }}>
-               <div className="mb-12 flex items-center justify-between border-b pb-6">
-                 <div className="flex items-center gap-6">
-                    <div style={{ backgroundColor: '#2563eb', color: '#fff', width: '60px', height: '60px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>ANI</div>
-                    <div>
-                      <h1 style={{ color: '#1e3a8a', fontSize: '24px', fontWeight: 'bold', margin: 0 }}>Reporte Estratégico Digital</h1>
-                      <p style={{ color: '#2563eb', fontSize: '14px', margin: 0 }}>Análisis Completo para {analysis.basicInfo.businessName || analysis.basicInfo.handle}</p>
-                    </div>
-                 </div>
-                 <div style={{ textAlign: 'right', fontSize: '12px', color: '#94a3b8' }}>
-                   Fecha de emisión: {new Date().toLocaleDateString()}<br/>
-                   Asistente de Negocios Inteligentes
-                 </div>
+            <div ref={fullReportRef} style={{ width: '800px', backgroundColor: '#fff', padding: '40px' }}>
+               <div className="mb-12 flex items-center justify-between border-b pb-8">
+                  <div className="flex items-center gap-6">
+                     <div style={{ backgroundColor: '#2563eb', color: '#fff', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>ANI</div>
+                     <div>
+                        <h1 style={{ fontSize: '28px', color: '#1e3a8a', fontWeight: 'bold', margin: 0 }}>Auditoría Digital de Perfil</h1>
+                        <p style={{ color: '#2563eb', margin: 0 }}>Análisis estratégico para {analysis.basicInfo.businessName}</p>
+                     </div>
+                  </div>
+                  <div className="text-right text-xs text-slate-400">
+                     ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}<br/>
+                     Fecha: {new Date().toLocaleDateString()}
+                  </div>
                </div>
-               
-               <div style={{ backgroundColor: '#1e3a8a', color: '#fff', padding: '30px', borderRadius: '20px', marginBottom: '40px' }}>
-                 <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '10px' }}>Salud Digital: {analysis.diagnosis.overallScore}/10</h2>
-                 <p style={{ fontSize: '14px', fontStyle: 'italic', opacity: 0.9 }}>"{analysis.diagnosis.executiveSummary}"</p>
-               </div>
-
                <ReportSections isPdf={true} />
-               
-               <div className="mt-12 pt-8 border-t border-slate-100 text-center">
-                 <p style={{ fontSize: '12px', color: '#64748b' }}>© 2024 ANI Solutions. Expandiendo tu alcance, aumentando tus ventas.</p>
+               <div className="mt-12 pt-8 border-t text-center text-xs text-slate-400">
+                  Reporte generado por ANI (Asistente de Negocios Inteligentes) - Todos los derechos reservados 2024.
                </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Footer (Solo UI) */}
-      <footer className="mt-24 pb-12 border-t border-slate-200 pt-12 text-center no-print">
-        <div className="max-w-xl mx-auto space-y-4">
-          <h3 className="text-xl font-bold text-slate-800">¿Listo para escalar tu negocio con ANI?</h3>
-          <p className="text-slate-400 text-xs">© 2024 ANI Solutions. Expandiendo tu alcance, aumentando tus ventas.</p>
-        </div>
-      </footer>
-
       {status === 'error' && (
-        <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-center no-print">
-          <p className="text-red-700 font-bold">Error en el análisis de ANI</p>
-          <button onClick={() => setStatus('idle')} className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg font-bold">Reintentar con ANI</button>
+        <div className="mt-8 p-8 bg-red-50 border border-red-200 rounded-2xl text-center max-w-xl mx-auto no-print">
+          <p className="text-red-700 font-bold mb-2">No pudimos completar el análisis</p>
+          <p className="text-red-600 text-sm mb-6">{errorMessage}</p>
+          <button onClick={() => setStatus('idle')} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition">Reintentar con otro perfil</button>
         </div>
       )}
     </div>

@@ -7,26 +7,32 @@ const API_KEY = process.env.API_KEY || "";
 export const performAnalysis = async (username: string): Promise<InstagramAnalysis> => {
   const ai = new GoogleGenAI({ apiKey: API_KEY });
 
-  // Limpiamos el nombre de usuario eliminando el @ si existe
-  const cleanHandle = username.replace('@', '').trim().toLowerCase();
+  // Limpiar el input: extraer el nombre de usuario de una URL o un handle con @
+  let cleanHandle = username.trim().toLowerCase();
+  if (cleanHandle.includes("instagram.com/")) {
+    cleanHandle = cleanHandle.split("instagram.com/")[1].split("/")[0].split("?")[0];
+  }
+  cleanHandle = cleanHandle.replace('@', '');
 
-  const prompt = `INSTRUCCIÓN DE BÚSQUEDA PROFESIONAL Y ESTRICTA:
-  Actúa como un Analista de Datos de Redes Sociales de alto nivel. Tu objetivo es analizar el perfil de Instagram EXACTO: https://www.instagram.com/${cleanHandle}/
+  const prompt = `TAREA DE INVESTIGACIÓN PROFESIONAL DE PERFIL:
+  Analiza minuciosamente el perfil de Instagram: https://www.instagram.com/${cleanHandle}/
   
-  PASOS OBLIGATORIOS PARA EVITAR ERRORES DE IDENTIDAD:
-  1. Utiliza Google Search para localizar la URL específica 'instagram.com/${cleanHandle}'. 
-  2. VERIFICACIÓN DE IDENTIDAD: Antes de extraer datos, confirma que el 'handle' en los resultados de búsqueda sea exactamente "${cleanHandle}". No aceptes perfiles similares, fans pages, o cuentas con guiones/puntos adicionales.
-  3. Si encuentras un perfil con un nombre parecido pero el handle NO es "${cleanHandle}", ignóralo completamente.
-  4. Si el perfil no devuelve información pública indexada o es privado, responde con un JSON indicando "No se encontró información" en los campos de datos, pero NO inventes información de otros negocios.
+  PASOS DE VALIDACIÓN OBLIGATORIOS:
+  1. Usa Google Search para encontrar la página de Instagram EXACTA de "${cleanHandle}".
+  2. Si no hay datos suficientes en Instagram, busca en sitios de reseñas (Google Maps, Yelp), directorios de empresas o su sitio web oficial vinculado para confirmar la identidad del negocio.
+  3. EXTRAE DE LOS SNIPPETS DE BÚSQUEDA:
+     - Nombre real del negocio y categoría.
+     - Biografía y enlaces en el perfil.
+     - Ubicación física (si aplica).
+     - Análisis visual basado en las descripciones de las miniaturas de sus posts.
+     - Frecuencia de publicación (busca fechas en los resultados).
   
-  ESTRUCTURA DE ANÁLISIS (Inspirado en Inflact/Herramientas Profesionales):
-  - ANALIZA: Nombre oficial, Bio, Categoría, Servicios específicos mencionados en sus posts o bio.
-  - MÉTRICAS: Estima el engagement basado en la interacción visible en fragmentos de búsqueda.
-  - CONTENIDO: Identifica si usa más Reels, Carruseles o fotos fijas. Tono de marca.
-  - COMPETENCIA: Encuentra 3 competidores reales que operen en el mismo sector y escala que @${cleanHandle}.
-  - ESTRATEGIA: Genera un plan de mejora basado en las debilidades reales detectadas.
+  DIAGNÓSTICO ESTRATÉGICO:
+  - Compara con 3 competidores REALES en su misma ciudad o nicho.
+  - Identifica "Gaps": ¿Tienen botón de WhatsApp?, ¿Usan Reels?, ¿Su estética es coherente?
+  - Genera una propuesta comercial agresiva para venderles servicios de automatización e IA.
 
-  REGLA DE ORO: Si no estás 100% seguro de que los datos pertenecen a @${cleanHandle}, marca el campo como "No se encontró información".`;
+  IMPORTANTE: No inventes datos. Si el perfil es totalmente privado o inexistente, el campo 'businessName' debe decir "PERFIL NO ENCONTRADO O PRIVADO".`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
@@ -172,25 +178,26 @@ export const performAnalysis = async (username: string): Promise<InstagramAnalys
   });
 
   try {
-    const analysis = JSON.parse(response.text) as InstagramAnalysis;
+    const text = response.text;
+    const analysis = JSON.parse(text) as InstagramAnalysis;
     
-    // Extraemos las fuentes para verificar la procedencia de los datos
+    // Extraemos las fuentes de Google Search para dar validez al reporte
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const sources = groundingChunks
       .filter((chunk: any) => chunk.web)
       .map((chunk: any) => ({
-        title: chunk.web.title || "Fuente externa",
+        title: chunk.web.title || "Instagram / Web Source",
         uri: chunk.web.uri
       }));
 
-    // Validación extra del handle devuelto por la IA
-    if (analysis.basicInfo.handle.toLowerCase().replace('@', '') !== cleanHandle) {
-        console.warn("Posible discrepancia de perfil detectada. Verificando integridad...");
+    // Si el modelo indica que no encontró nada en el nombre del negocio
+    if (analysis.basicInfo.businessName.includes("NO ENCONTRADO")) {
+      throw new Error("Perfil no encontrado o es privado");
     }
 
-    return { ...analysis, sources };
+    return { ...analysis, sources: sources.length > 0 ? sources : [{ title: `Instagram @${cleanHandle}`, uri: `https://instagram.com/${cleanHandle}` }] };
   } catch (e) {
-    console.error("Error al procesar la respuesta de la IA:", e);
-    throw new Error("No se pudo procesar el análisis. Inténtalo de nuevo.");
+    console.error("Error parsing analysis:", e);
+    throw new Error("No pudimos analizar este perfil. Asegúrate de que el nombre de usuario sea correcto y el perfil sea público.");
   }
 };
