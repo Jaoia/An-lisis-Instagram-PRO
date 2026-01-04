@@ -7,14 +7,29 @@ const API_KEY = process.env.API_KEY || "";
 export const performAnalysis = async (username: string): Promise<InstagramAnalysis> => {
   const ai = new GoogleGenAI({ apiKey: API_KEY });
 
-  const prompt = `Analiza profundamente el perfil de Instagram @${username}. 
-  Usa Google Search para encontrar información sobre este negocio, su presencia en Instagram, su industria y competidores locales o globales relevantes.
-  Proporciona un informe detallado y profesional que ayude a convencer al dueño del negocio de mejorar su presencia digital.
+  // Limpiamos el nombre de usuario eliminando el @ si existe
+  const cleanHandle = username.replace('@', '').trim().toLowerCase();
+
+  const prompt = `INSTRUCCIÓN DE BÚSQUEDA PROFESIONAL Y ESTRICTA:
+  Actúa como un Analista de Datos de Redes Sociales de alto nivel. Tu objetivo es analizar el perfil de Instagram EXACTO: https://www.instagram.com/${cleanHandle}/
   
-  El análisis debe ser realista basado en la información encontrada en la web.`;
+  PASOS OBLIGATORIOS PARA EVITAR ERRORES DE IDENTIDAD:
+  1. Utiliza Google Search para localizar la URL específica 'instagram.com/${cleanHandle}'. 
+  2. VERIFICACIÓN DE IDENTIDAD: Antes de extraer datos, confirma que el 'handle' en los resultados de búsqueda sea exactamente "${cleanHandle}". No aceptes perfiles similares, fans pages, o cuentas con guiones/puntos adicionales.
+  3. Si encuentras un perfil con un nombre parecido pero el handle NO es "${cleanHandle}", ignóralo completamente.
+  4. Si el perfil no devuelve información pública indexada o es privado, responde con un JSON indicando "No se encontró información" en los campos de datos, pero NO inventes información de otros negocios.
+  
+  ESTRUCTURA DE ANÁLISIS (Inspirado en Inflact/Herramientas Profesionales):
+  - ANALIZA: Nombre oficial, Bio, Categoría, Servicios específicos mencionados en sus posts o bio.
+  - MÉTRICAS: Estima el engagement basado en la interacción visible en fragmentos de búsqueda.
+  - CONTENIDO: Identifica si usa más Reels, Carruseles o fotos fijas. Tono de marca.
+  - COMPETENCIA: Encuentra 3 competidores reales que operen en el mismo sector y escala que @${cleanHandle}.
+  - ESTRATEGIA: Genera un plan de mejora basado en las debilidades reales detectadas.
+
+  REGLA DE ORO: Si no estás 100% seguro de que los datos pertenecen a @${cleanHandle}, marca el campo como "No se encontró información".`;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
@@ -156,16 +171,26 @@ export const performAnalysis = async (username: string): Promise<InstagramAnalys
     }
   });
 
-  const analysis = JSON.parse(response.text) as InstagramAnalysis;
-  
-  // Extract sources
-  const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-  const sources = groundingChunks
-    .filter((chunk: any) => chunk.web)
-    .map((chunk: any) => ({
-      title: chunk.web.title || "Fuente externa",
-      uri: chunk.web.uri
-    }));
+  try {
+    const analysis = JSON.parse(response.text) as InstagramAnalysis;
+    
+    // Extraemos las fuentes para verificar la procedencia de los datos
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const sources = groundingChunks
+      .filter((chunk: any) => chunk.web)
+      .map((chunk: any) => ({
+        title: chunk.web.title || "Fuente externa",
+        uri: chunk.web.uri
+      }));
 
-  return { ...analysis, sources };
+    // Validación extra del handle devuelto por la IA
+    if (analysis.basicInfo.handle.toLowerCase().replace('@', '') !== cleanHandle) {
+        console.warn("Posible discrepancia de perfil detectada. Verificando integridad...");
+    }
+
+    return { ...analysis, sources };
+  } catch (e) {
+    console.error("Error al procesar la respuesta de la IA:", e);
+    throw new Error("No se pudo procesar el análisis. Inténtalo de nuevo.");
+  }
 };
