@@ -37,13 +37,26 @@ const App: React.FC = () => {
     }
   };
 
+  // Helper function to render "No se encontró información" if value is missing
+  const renderValue = (value: any, fallback: string = "No se encontró información") => {
+    if (!value || (Array.isArray(value) && value.length === 0)) {
+      return <span className="text-slate-400 italic">{fallback}</span>;
+    }
+    if (Array.isArray(value)) {
+      return value.join(', ');
+    }
+    return value;
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
       {/* Header & Hero */}
       <header className="text-center mb-12">
-        <h1 className="text-4xl font-extrabold text-blue-900 mb-2">InstaBiz Analyst Pro</h1>
+        <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 text-white text-4xl font-black rounded-3xl shadow-xl mb-6 shadow-blue-200 rotate-3">ANI</div>
+        <h1 className="text-4xl font-extrabold text-blue-900 mb-2">Asistente de Negocios Inteligentes</h1>
+        <p className="text-xl font-medium text-blue-600 mb-4 italic">Expande tu alcance, Aumenta tus ventas con ANI</p>
         <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-          Transforma tu presencia en Instagram en una máquina de ventas. Obtén un análisis profesional profundo y un plan de acción estratégico.
+          Transforma tu presencia en Instagram en una máquina de ventas. Obtén un análisis profesional profundo y un plan de acción estratégico de la mano de nuestra IA.
         </p>
       </header>
 
@@ -66,16 +79,15 @@ const App: React.FC = () => {
             disabled={status === 'searching' || status === 'analyzing' || !username}
             className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl transition shadow-lg shadow-blue-200"
           >
-            {status === 'searching' ? 'Buscando...' : status === 'analyzing' ? 'Analizando...' : 'Iniciar Análisis'}
+            {status === 'searching' ? 'Buscando...' : status === 'analyzing' ? 'Analizando...' : 'Iniciar Análisis con ANI'}
           </button>
         </form>
 
-        {/* Progress indicator */}
         {(status === 'searching' || status === 'analyzing') && (
           <div className="mt-8">
             <div className="flex justify-between mb-2">
               <span className="text-sm font-medium text-blue-700">
-                {status === 'searching' ? 'Recopilando datos de @' + username : 'Procesando métricas e insights...'}
+                {status === 'searching' ? 'ANI está recopilando datos de @' + username : 'ANI procesando métricas e insights...'}
               </span>
               <span className="text-sm font-medium text-blue-700">{status === 'searching' ? '35%' : '75%'}</span>
             </div>
@@ -88,14 +100,13 @@ const App: React.FC = () => {
         )}
       </section>
 
-      {/* Analysis Results */}
       {analysis && status === 'completed' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
           
           {/* Summary Score Card */}
           <div className="bg-blue-900 text-white rounded-2xl p-8 mb-8 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl">
             <div className="flex-1">
-              <h2 className="text-2xl font-bold mb-2">Puntuación de Salud Digital: {analysis.diagnosis.overallScore}/10</h2>
+              <h2 className="text-2xl font-bold mb-2">Puntuación de Salud Digital por ANI: {analysis.diagnosis.overallScore}/10</h2>
               <p className="text-blue-100 opacity-90 leading-relaxed italic">
                 "{analysis.diagnosis.executiveSummary}"
               </p>
@@ -137,64 +148,129 @@ const App: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Main Tab Content */}
             <div className="lg:col-span-8 space-y-8">
               
               {activeTab === 'info' && (
                 <div className="space-y-6">
-                  <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
-                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                      <span className="bg-blue-100 p-2 rounded-lg text-blue-600">📍</span> Perfil del Negocio
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nombre del Negocio</label>
-                        <p className="text-lg font-semibold text-slate-800">{analysis.basicInfo.businessName}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Categoría</label>
-                        <p className="text-lg font-semibold text-slate-800">{analysis.basicInfo.category}</p>
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Biografía Analizada</label>
-                        <p className="text-slate-600 mt-1">{analysis.basicInfo.bio}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ubicación</label>
-                        <p className="text-slate-700 font-medium">{analysis.basicInfo.location}</p>
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Sitio Web</label>
-                        <a href={analysis.basicInfo.contact.website} target="_blank" rel="noreferrer" className="block text-blue-600 hover:underline font-medium truncate">
-                          {analysis.basicInfo.contact.website}
-                        </a>
-                      </div>
+                  {/* ENTREGABLE DE INFORMACIÓN BÁSICA */}
+                  <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm overflow-hidden relative">
+                    <div className="absolute top-0 right-0 p-4 opacity-5">
+                      <span className="text-6xl font-black">01</span>
                     </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
-                    <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
-                      <span className="bg-blue-100 p-2 rounded-lg text-blue-600">🎯</span> Estrategia Actual
+                    
+                    <h3 className="text-2xl font-bold text-blue-900 mb-8 flex items-center gap-3">
+                      <span className="bg-blue-600 text-white w-10 h-10 flex items-center justify-center rounded-xl shadow-lg">📄</span>
+                      Entregable: Diagnóstico de Perfil
                     </h3>
-                    <div className="space-y-6">
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Audiencia Objetivo</label>
-                        <p className="text-slate-700 mt-1">{analysis.basicInfo.targetAudience}</p>
+
+                    <div className="space-y-8">
+                      {/* 1. Nombre del negocio o nombre usuario */}
+                      <div className="flex gap-6 border-b border-slate-50 pb-4">
+                        <div className="text-blue-600 font-bold text-xl min-w-[30px]">1</div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Nombre del Negocio / Perfil</label>
+                          <p className="text-lg font-bold text-slate-800">{renderValue(analysis.basicInfo.businessName || analysis.basicInfo.handle)}</p>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Propuesta de Valor</label>
-                        <p className="text-slate-700 mt-1 p-4 bg-slate-50 rounded-xl border border-slate-100 italic">
-                          "{analysis.basicInfo.uniqueValueProp}"
-                        </p>
+
+                      {/* 2. Tipo/categoría de negocio */}
+                      <div className="flex gap-6 border-b border-slate-50 pb-4">
+                        <div className="text-blue-600 font-bold text-xl min-w-[30px]">2</div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Tipo / Categoría de Negocio</label>
+                          <p className="text-slate-700 font-medium">{renderValue(analysis.basicInfo.category)}</p>
+                        </div>
                       </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Servicios Identificados</label>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {analysis.basicInfo.services.map((s, i) => (
-                            <span key={i} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium border border-blue-100">
-                              {s}
-                            </span>
-                          ))}
+
+                      {/* 3. Descripción del negocio (biografía) */}
+                      <div className="flex gap-6 border-b border-slate-50 pb-4">
+                        <div className="text-blue-600 font-bold text-xl min-w-[30px]">3</div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Descripción del Negocio (Biografía)</label>
+                          <p className="text-slate-600 leading-relaxed italic">{renderValue(analysis.basicInfo.bio)}</p>
+                        </div>
+                      </div>
+
+                      {/* 4. Servicios principales */}
+                      <div className="flex gap-6 border-b border-slate-50 pb-4">
+                        <div className="text-blue-600 font-bold text-xl min-w-[30px]">4</div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Servicios Principales (Contenido)</label>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {analysis.basicInfo.services.length > 0 ? (
+                              analysis.basicInfo.services.map((s, i) => (
+                                <span key={i} className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-sm font-semibold border border-blue-100">
+                                  {s}
+                                </span>
+                              ))
+                            ) : (
+                              <p className="text-slate-400 italic">No se encontró información</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 5. Ubicación del negocio */}
+                      <div className="flex gap-6 border-b border-slate-50 pb-4">
+                        <div className="text-blue-600 font-bold text-xl min-w-[30px]">5</div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Ubicación del Negocio</label>
+                          <p className="text-slate-700">{renderValue(analysis.basicInfo.location)}</p>
+                        </div>
+                      </div>
+
+                      {/* 6. Audiencia objetivo */}
+                      <div className="flex gap-6 border-b border-slate-50 pb-4">
+                        <div className="text-blue-600 font-bold text-xl min-w-[30px]">6</div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Audiencia Objetivo (Perfil Demográfico)</label>
+                          <p className="text-slate-700">{renderValue(analysis.basicInfo.targetAudience)}</p>
+                        </div>
+                      </div>
+
+                      {/* 7. Propuesta de valor única */}
+                      <div className="flex gap-6 border-b border-slate-50 pb-4">
+                        <div className="text-blue-600 font-bold text-xl min-w-[30px]">7</div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Propuesta de Valor Única / Diferenciadores</label>
+                          <p className="text-slate-700 font-medium p-4 bg-slate-50 rounded-xl border-l-4 border-blue-500">{renderValue(analysis.basicInfo.uniqueValueProp)}</p>
+                        </div>
+                      </div>
+
+                      {/* 8. Datos de contacto */}
+                      <div className="flex gap-6 border-b border-slate-50 pb-4">
+                        <div className="text-blue-600 font-bold text-xl min-w-[30px]">8</div>
+                        <div className="flex-1">
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Datos de Contacto</label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                              <span className="text-blue-500">📞</span>
+                              <span className="text-sm font-medium">{renderValue(analysis.basicInfo.contact.phone)}</span>
+                            </div>
+                            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                              <span className="text-blue-500">📧</span>
+                              <span className="text-sm font-medium truncate">{renderValue(analysis.basicInfo.contact.email)}</span>
+                            </div>
+                            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl sm:col-span-2">
+                              <span className="text-blue-500">🔗</span>
+                              <span className="text-sm font-medium truncate">{renderValue(analysis.basicInfo.contact.mainLink)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 9. Sitio web */}
+                      <div className="flex gap-6">
+                        <div className="text-blue-600 font-bold text-xl min-w-[30px]">9</div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Sitio Web Oficial</label>
+                          {analysis.basicInfo.contact.website ? (
+                            <a href={analysis.basicInfo.contact.website} target="_blank" rel="noreferrer" className="text-blue-600 font-bold text-lg hover:underline truncate block">
+                              {analysis.basicInfo.contact.website}
+                            </a>
+                          ) : (
+                            <p className="text-slate-400 italic">No se encontró información</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -262,7 +338,7 @@ const App: React.FC = () => {
               {activeTab === 'competitors' && (
                 <div className="space-y-6">
                   <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
-                    <h3 className="text-xl font-bold text-slate-800 mb-6">Benchmark vs Competencia</h3>
+                    <h3 className="text-xl font-bold text-slate-800 mb-6">Benchmark vs Competencia (Analizado por ANI)</h3>
                     <ComparisonChart competitors={analysis.competitors} businessName={analysis.basicInfo.businessName} />
                   </div>
 
@@ -293,7 +369,7 @@ const App: React.FC = () => {
               {activeTab === 'diagnosis' && (
                 <div className="space-y-6">
                   <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
-                    <h3 className="text-xl font-bold text-slate-800 mb-6">Oportunidades Prioritarias</h3>
+                    <h3 className="text-xl font-bold text-slate-800 mb-6">Oportunidades Prioritarias Identificadas</h3>
                     <div className="space-y-4">
                       {analysis.diagnosis.opportunities.map((opp, i) => (
                         <div key={i} className={`p-5 rounded-2xl border ${getPriorityColor(opp.priority)}`}>
@@ -308,7 +384,7 @@ const App: React.FC = () => {
                   </div>
 
                   <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
-                    <h3 className="text-xl font-bold text-slate-800 mb-4">Brechas Detectadas</h3>
+                    <h3 className="text-xl font-bold text-slate-800 mb-4">Brechas Detectadas vs Líderes</h3>
                     <ul className="space-y-3">
                       {analysis.diagnosis.gapsVsCompetitors.map((gap, i) => (
                         <li key={i} className="flex gap-3 text-slate-700">
@@ -325,7 +401,7 @@ const App: React.FC = () => {
                 <div className="space-y-8">
                   <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-2xl relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600 transform translate-x-16 -translate-y-16 rotate-45 opacity-10"></div>
-                    <h3 className="text-2xl font-bold text-blue-900 mb-6">Nuestra Estrategia Growth</h3>
+                    <h3 className="text-2xl font-bold text-blue-900 mb-6">Propuesta Growth de ANI</h3>
                     <p className="text-slate-600 mb-8 leading-relaxed">
                       {analysis.commercialProposal.introduction}
                     </p>
@@ -358,7 +434,7 @@ const App: React.FC = () => {
                     </div>
 
                     <div className="bg-blue-50 p-8 rounded-3xl border border-blue-100 mb-8">
-                      <h4 className="text-center font-bold text-blue-900 mb-6 uppercase tracking-widest text-sm">Resultados Proyectados (Próximos 6 Meses)</h4>
+                      <h4 className="text-center font-bold text-blue-900 mb-6 uppercase tracking-widest text-sm">Resultados Proyectados con ANI (Próximos 6 Meses)</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         {analysis.commercialProposal.projectedBenefits.map((benefit, i) => (
                           <div key={i} className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
@@ -370,7 +446,7 @@ const App: React.FC = () => {
                     </div>
 
                     <button className="w-full py-4 bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-700 transition transform hover:scale-[1.01] active:scale-[0.99] shadow-xl shadow-blue-200">
-                      Agendar Consulta de Estrategia Gratuita
+                      Agendar Consulta Estratégica con el Equipo de ANI
                     </button>
                   </div>
                 </div>
@@ -378,27 +454,26 @@ const App: React.FC = () => {
 
             </div>
 
-            {/* Sidebar / Quick Contacts */}
             <div className="lg:col-span-4 space-y-6">
               <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm sticky top-8">
                 <h4 className="font-bold text-slate-800 mb-4 uppercase text-xs tracking-widest">Canales de Contacto</h4>
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <span className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-blue-600">📞</span>
-                    <span className="text-sm font-medium text-slate-700">{analysis.basicInfo.contact.phone || 'No detectado'}</span>
+                    <span className="text-sm font-medium text-slate-700">{renderValue(analysis.basicInfo.contact.phone)}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-blue-600">📧</span>
-                    <span className="text-sm font-medium text-slate-700 truncate">{analysis.basicInfo.contact.email || 'No detectado'}</span>
+                    <span className="text-sm font-medium text-slate-700 truncate">{renderValue(analysis.basicInfo.contact.email)}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-blue-600">🔗</span>
-                    <span className="text-sm font-medium text-slate-700 truncate">{analysis.basicInfo.contact.mainLink || 'Instagram Linktree'}</span>
+                    <span className="text-sm font-medium text-slate-700 truncate">{renderValue(analysis.basicInfo.contact.mainLink)}</span>
                   </div>
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-slate-100">
-                  <h4 className="font-bold text-slate-800 mb-4 uppercase text-xs tracking-widest">Fuentes del Análisis</h4>
+                  <h4 className="font-bold text-slate-800 mb-4 uppercase text-xs tracking-widest">Fuentes del Análisis de ANI</h4>
                   <div className="space-y-3">
                     {analysis.sources.map((source, i) => (
                       <a key={i} href={source.uri} target="_blank" rel="noreferrer" className="block text-xs text-blue-500 hover:underline truncate">
@@ -410,7 +485,7 @@ const App: React.FC = () => {
 
                 <div className="mt-8">
                   <button onClick={() => window.print()} className="w-full py-2 border-2 border-blue-600 text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition text-sm">
-                    Descargar Informe PDF
+                    Descargar Informe PDF Completo
                   </button>
                 </div>
               </div>
@@ -422,25 +497,24 @@ const App: React.FC = () => {
       {/* Footer */}
       <footer className="mt-24 pb-12 border-t border-slate-200 pt-12 text-center">
         <div className="max-w-xl mx-auto space-y-4">
-          <h3 className="text-xl font-bold text-slate-800">¿Listo para escalar tu negocio?</h3>
+          <h3 className="text-xl font-bold text-slate-800">¿Listo para escalar tu negocio con ANI?</h3>
           <p className="text-slate-500 text-sm">
-            Este reporte fue generado por InstaBiz Analyst Pro. Nuestra misión es ayudar a negocios locales a dominar el ecosistema digital mediante tecnología de vanguardia e inteligencia artificial.
+            Este reporte fue generado por <strong>ANI (Asistente de Negocios Inteligentes)</strong>. Nuestra misión es ayudar a negocios locales a dominar el ecosistema digital mediante tecnología de vanguardia e inteligencia artificial.
           </p>
           <div className="pt-4 flex justify-center gap-4">
-             <button className="text-blue-600 font-bold hover:underline">Saber más sobre nosotros</button>
+             <button className="text-blue-600 font-bold hover:underline">Saber más sobre ANI</button>
              <span className="text-slate-300">|</span>
              <button className="text-blue-600 font-bold hover:underline">Política de Privacidad</button>
           </div>
-          <p className="text-slate-400 text-xs mt-8">© 2024 InstaBiz Solutions. Todos los derechos reservados.</p>
+          <p className="text-slate-400 text-xs mt-8">© 2024 ANI Solutions. Expandiendo tu alcance, aumentando tus ventas.</p>
         </div>
       </footer>
 
-      {/* Error state */}
       {status === 'error' && (
         <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-center">
-          <p className="text-red-700 font-bold">Error en el análisis</p>
-          <p className="text-red-600 text-sm mt-1">No pudimos encontrar suficiente información pública para @{username}. Asegúrate de que el perfil sea de un negocio y tenga presencia en la web.</p>
-          <button onClick={() => setStatus('idle')} className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg font-bold">Reintentar</button>
+          <p className="text-red-700 font-bold">Error en el análisis de ANI</p>
+          <p className="text-red-600 text-sm mt-1">ANI no pudo encontrar suficiente información pública para @{username}. Asegúrate de que el perfil sea de un negocio y tenga presencia en la web.</p>
+          <button onClick={() => setStatus('idle')} className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg font-bold">Reintentar con ANI</button>
         </div>
       )}
     </div>
