@@ -5,6 +5,7 @@ import { performAnalysis } from './services/geminiService';
 import ComparisonChart from './components/ComparisonChart';
 
 const App: React.FC = () => {
+  const [appMode, setAppMode] = useState<'analyzer' | 'web-generator'>('analyzer');
   const [username, setUsername] = useState('');
   const [status, setStatus] = useState<AnalysisStatus>('idle');
   const [isExporting, setIsExporting] = useState(false);
@@ -12,6 +13,22 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'info' | 'content' | 'competitors' | 'diagnosis' | 'proposal'>('info');
   const [errorMessage, setErrorMessage] = useState('');
   
+  // Estados para el Generador de Prompt Web
+  const [webFormData, setWebFormData] = useState({
+    businessName: '',
+    mainContact: '',
+    activity: '',
+    services: '',
+    differentiator: '',
+    objectives: '',
+    location: '',
+    instagramUrl: '',
+    whatsapp: '',
+    email: ''
+  });
+  const [generatedPrompt, setGeneratedPrompt] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
+
   const fullReportRef = useRef<HTMLDivElement>(null);
 
   const handleAnalyze = async (e: React.FormEvent) => {
@@ -32,16 +49,28 @@ const App: React.FC = () => {
     }
   };
 
+  const handleGeneratePrompt = () => {
+    const { businessName, activity, services, differentiator, objectives, location, whatsapp, instagramUrl, email } = webFormData;
+    
+    const prompt = `Actúa como un experto Desarrollador Web y Copywriter Senior. Crea una estructura de página web profesional, moderna y totalmente funcional para el negocio ${businessName || '[Nombre del Negocio]'}. El negocio se dedica a ${activity || '[Actividad]'} y ofrece: ${services || '[Servicios]'}. Nuestra propuesta única es ${differentiator || '[Diferenciador]'} y buscamos ${objectives || '[Objetivos]'}.
+
+La web debe incluir secciones de: Servicios detallados, Sobre nosotros y Contacto. Integra estratégicamente botones de llamada a la acción (CTA) que dirijan al WhatsApp: ${whatsapp || '[WhatsApp]'} con textos como "Reserva tu cita" o "Contáctanos ahora". Incluye enlaces a Instagram: ${instagramUrl || '[Instagram]'} y el correo ${email || '[Correo]'}. El diseño debe ser optimizado para conversión, con una jerarquía visual clara y ubicado para el público de ${location || '[Ubicación]'}. Genera el código o la estructura necesaria para que sea totalmente funcional en plataformas de IA como Hostinger.`;
+    
+    setGeneratedPrompt(prompt);
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(generatedPrompt);
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
+
   const handleDownloadPDF = async () => {
     if (!fullReportRef.current || !analysis) return;
-    
     setIsExporting(true);
-    
     try {
-      // Importación dinámica robusta para html2pdf
       const html2pdfModule = await import('https://esm.sh/html2pdf.js@0.10.1');
       const html2pdf = html2pdfModule.default;
-      
       const element = fullReportRef.current;
       const opt = {
         margin: [10, 10, 10, 10],
@@ -50,11 +79,10 @@ const App: React.FC = () => {
         html2canvas: { scale: 2, useCORS: true, logging: false },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
       };
-
       await html2pdf().set(opt).from(element).save();
     } catch (error) {
       console.error("Error generating PDF:", error);
-      alert("No se pudo generar el PDF. Por favor, inténtalo de nuevo.");
+      alert("No se pudo generar el PDF.");
     } finally {
       setIsExporting(false);
     }
@@ -78,7 +106,6 @@ const App: React.FC = () => {
 
   const ReportSections = ({ isPdf = false }: { isPdf?: boolean }) => {
     if (!analysis) return null;
-
     return (
       <div className={`space-y-12 ${isPdf ? 'p-4 bg-white' : ''}`}>
         {(isPdf || activeTab === 'info') && (
@@ -113,7 +140,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-
         {(isPdf || activeTab === 'content') && (
           <div className="space-y-6 break-inside-avoid">
              <div className="grid grid-cols-3 gap-4">
@@ -148,7 +174,6 @@ const App: React.FC = () => {
              </div>
           </div>
         )}
-
         {(isPdf || activeTab === 'competitors') && (
           <div className="space-y-6 break-inside-avoid">
             <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
@@ -159,7 +184,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-
         {(isPdf || activeTab === 'diagnosis') && (
           <div className="space-y-6 break-inside-avoid">
             <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm">
@@ -178,7 +202,6 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
-
         {(isPdf || activeTab === 'proposal') && (
           <div className="space-y-8 break-inside-avoid">
             <div className="bg-blue-900 text-white rounded-2xl p-8 relative overflow-hidden">
@@ -208,131 +231,320 @@ const App: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-      <header className="text-center mb-12 no-print">
-        <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 text-white text-4xl font-black rounded-3xl shadow-xl mb-6 rotate-3">ANI</div>
-        <h1 className="text-4xl font-extrabold text-blue-900 mb-2">Asistente de Negocios Inteligentes</h1>
-        <p className="text-xl font-medium text-blue-600 italic">Análisis profesional de perfiles para escalar tus ventas</p>
-      </header>
-
-      <section className="bg-white rounded-2xl shadow-xl p-8 mb-12 border border-slate-100 max-w-3xl mx-auto no-print">
-        <form onSubmit={handleAnalyze} className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-grow">
-            <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 font-bold">@</span>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Ej: apple o https://instagram.com/apple"
-              className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              disabled={status === 'searching' || status === 'analyzing'}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={status === 'searching' || status === 'analyzing' || !username}
-            className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl transition shadow-lg"
-          >
-            {status === 'searching' || status === 'analyzing' ? 'Buscando perfil...' : 'Analizar Perfil'}
-          </button>
-        </form>
-        {status === 'searching' && (
-           <div className="mt-4 flex items-center justify-center gap-3 text-blue-600 font-medium animate-pulse">
-              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-              ANI está escaneando la web para encontrar el perfil...
-           </div>
-        )}
-      </section>
-
-      {analysis && status === 'completed' && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="bg-blue-900 text-white rounded-2xl p-8 mb-8 flex items-center justify-between no-print">
-            <div>
-              <h2 className="text-2xl font-bold mb-2">Salud Digital: {analysis.diagnosis.overallScore}/10</h2>
-              <p className="text-blue-100 italic opacity-90 max-w-2xl">"{analysis.diagnosis.executiveSummary}"</p>
-            </div>
-            <div className="hidden md:block">
-               <div className="w-24 h-24 border-8 border-blue-400 border-t-emerald-400 rounded-full flex items-center justify-center text-3xl font-bold">
-                  {analysis.diagnosis.overallScore}
-               </div>
-            </div>
-          </div>
-
-          <div className="flex overflow-x-auto pb-4 gap-2 mb-8 no-scrollbar no-print">
-            {[
-              { id: 'info', label: 'Info Perfil', icon: '👤' },
-              { id: 'content', label: 'Contenido', icon: '📊' },
-              { id: 'competitors', label: 'Benchmark', icon: '⚔️' },
-              { id: 'diagnosis', label: 'Mejoras', icon: '🚀' },
-              { id: 'proposal', label: 'Estrategia', icon: '💼' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`whitespace-nowrap px-6 py-3 rounded-full font-semibold transition flex items-center gap-2 border-2 ${
-                  activeTab === tab.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-600 hover:border-blue-200'
-                }`}
-              >
-                <span>{tab.icon}</span> {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-8 no-print">
-               <ReportSections />
-            </div>
-
-            <div className="lg:col-span-4 space-y-6 no-print">
-              <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm sticky top-8">
-                <h4 className="font-bold text-slate-800 mb-4 uppercase text-xs tracking-widest">Fuentes de Datos</h4>
-                <div className="space-y-3 mb-8">
-                  {analysis.sources.map((source, i) => (
-                    <a key={i} href={source.uri} target="_blank" rel="noreferrer" className="block text-xs text-blue-500 hover:underline truncate">
-                      • {source.title}
-                    </a>
-                  ))}
-                </div>
-                <button 
-                  onClick={handleDownloadPDF} 
-                  disabled={isExporting}
-                  className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2"
-                >
-                  {isExporting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : "Descargar Reporte PDF"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* PDF EXPORT CONTENT */}
-          <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
-            <div ref={fullReportRef} style={{ width: '800px', backgroundColor: '#fff', padding: '40px' }}>
-               <div className="mb-12 flex items-center justify-between border-b pb-8">
-                  <div className="flex items-center gap-6">
-                     <div style={{ backgroundColor: '#2563eb', color: '#fff', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>ANI</div>
-                     <div>
-                        <h1 style={{ fontSize: '28px', color: '#1e3a8a', fontWeight: 'bold', margin: 0 }}>Auditoría Digital de Perfil</h1>
-                        <p style={{ color: '#2563eb', margin: 0 }}>Análisis estratégico para {analysis.basicInfo.businessName}</p>
-                     </div>
-                  </div>
-                  <div className="text-right text-xs text-slate-400">
-                     ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}<br/>
-                     Fecha: {new Date().toLocaleDateString()}
-                  </div>
-               </div>
-               <ReportSections isPdf={true} />
-               <div className="mt-12 pt-8 border-t text-center text-xs text-slate-400">
-                  Reporte generado por ANI (Asistente de Negocios Inteligentes) - Todos los derechos reservados 2024.
-               </div>
-            </div>
+      <header className="text-center mb-8 no-print">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 text-white text-3xl font-black rounded-2xl shadow-xl mb-4 rotate-3">ANI</div>
+        <h1 className="text-3xl font-extrabold text-blue-900 mb-2">Asistente de Negocios Inteligentes</h1>
+        
+        {/* Selector de Modo */}
+        <div className="flex justify-center mt-6">
+          <div className="bg-slate-100 p-1 rounded-xl flex gap-1 shadow-inner">
+            <button 
+              onClick={() => setAppMode('analyzer')}
+              className={`px-6 py-2 rounded-lg text-sm font-bold transition ${appMode === 'analyzer' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              🔍 Auditoría Instagram
+            </button>
+            <button 
+              onClick={() => setAppMode('web-generator')}
+              className={`px-6 py-2 rounded-lg text-sm font-bold transition ${appMode === 'web-generator' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              🎨 Generador Web AI
+            </button>
           </div>
         </div>
-      )}
+      </header>
 
-      {status === 'error' && (
-        <div className="mt-8 p-8 bg-red-50 border border-red-200 rounded-2xl text-center max-w-xl mx-auto no-print">
-          <p className="text-red-700 font-bold mb-2">No pudimos completar el análisis</p>
-          <p className="text-red-600 text-sm mb-6">{errorMessage}</p>
-          <button onClick={() => setStatus('idle')} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition">Reintentar con otro perfil</button>
+      {appMode === 'analyzer' ? (
+        <>
+          <section className="bg-white rounded-2xl shadow-xl p-8 mb-12 border border-slate-100 max-w-3xl mx-auto no-print">
+            <form onSubmit={handleAnalyze} className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-grow">
+                <span className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 font-bold">@</span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Ej: apple o https://instagram.com/apple"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                  disabled={status === 'searching' || status === 'analyzing'}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={status === 'searching' || status === 'analyzing' || !username}
+                className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-xl transition shadow-lg"
+              >
+                {status === 'searching' || status === 'analyzing' ? 'Buscando perfil...' : 'Analizar Perfil'}
+              </button>
+            </form>
+            {status === 'searching' && (
+               <div className="mt-4 flex items-center justify-center gap-3 text-blue-600 font-medium animate-pulse">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  ANI está escaneando la web para encontrar el perfil...
+               </div>
+            )}
+          </section>
+
+          {analysis && status === 'completed' && (
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="bg-blue-900 text-white rounded-2xl p-8 mb-8 flex items-center justify-between no-print">
+                <div>
+                  <h2 className="text-2xl font-bold mb-2">Salud Digital: {analysis.diagnosis.overallScore}/10</h2>
+                  <p className="text-blue-100 italic opacity-90 max-w-2xl">"{analysis.diagnosis.executiveSummary}"</p>
+                </div>
+                <div className="hidden md:block">
+                   <div className="w-24 h-24 border-8 border-blue-400 border-t-emerald-400 rounded-full flex items-center justify-center text-3xl font-bold">
+                      {analysis.diagnosis.overallScore}
+                   </div>
+                </div>
+              </div>
+
+              <div className="flex overflow-x-auto pb-4 gap-2 mb-8 no-scrollbar no-print">
+                {[
+                  { id: 'info', label: 'Info Perfil', icon: '👤' },
+                  { id: 'content', label: 'Contenido', icon: '📊' },
+                  { id: 'competitors', label: 'Benchmark', icon: '⚔️' },
+                  { id: 'diagnosis', label: 'Mejoras', icon: '🚀' },
+                  { id: 'proposal', label: 'Estrategia', icon: '💼' }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`whitespace-nowrap px-6 py-3 rounded-full font-semibold transition flex items-center gap-2 border-2 ${
+                      activeTab === tab.id ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-600 hover:border-blue-200'
+                    }`}
+                  >
+                    <span>{tab.icon}</span> {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="lg:col-span-8 no-print">
+                   <ReportSections />
+                </div>
+
+                <div className="lg:col-span-4 space-y-6 no-print">
+                  <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm sticky top-8">
+                    <h4 className="font-bold text-slate-800 mb-4 uppercase text-xs tracking-widest">Fuentes de Datos</h4>
+                    <div className="space-y-3 mb-8">
+                      {analysis.sources.map((source, i) => (
+                        <a key={i} href={source.uri} target="_blank" rel="noreferrer" className="block text-xs text-blue-500 hover:underline truncate">
+                          • {source.title}
+                        </a>
+                      ))}
+                    </div>
+                    <button 
+                      onClick={handleDownloadPDF} 
+                      disabled={isExporting}
+                      className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2"
+                    >
+                      {isExporting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : "Descargar Reporte PDF"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* PDF EXPORT CONTENT */}
+              <div style={{ position: 'absolute', top: '-10000px', left: '-10000px' }}>
+                <div ref={fullReportRef} style={{ width: '800px', backgroundColor: '#fff', padding: '40px' }}>
+                   <div className="mb-12 flex items-center justify-between border-b pb-8">
+                      <div className="flex items-center gap-6">
+                         <div style={{ backgroundColor: '#2563eb', color: '#fff', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>ANI</div>
+                         <div>
+                            <h1 style={{ fontSize: '28px', color: '#1e3a8a', fontWeight: 'bold', margin: 0 }}>Auditoría Digital de Perfil</h1>
+                            <p style={{ color: '#2563eb', margin: 0 }}>Análisis estratégico para {analysis.basicInfo.businessName}</p>
+                         </div>
+                      </div>
+                      <div className="text-right text-xs text-slate-400">
+                         ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}<br/>
+                         Fecha: {new Date().toLocaleDateString()}
+                      </div>
+                   </div>
+                   <ReportSections isPdf={true} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {status === 'error' && (
+            <div className="mt-8 p-8 bg-red-50 border border-red-200 rounded-2xl text-center max-w-xl mx-auto no-print">
+              <p className="text-red-700 font-bold mb-2">No pudimos completar el análisis</p>
+              <p className="text-red-600 text-sm mb-6">{errorMessage}</p>
+              <button onClick={() => setStatus('idle')} className="px-6 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition">Reintentar con otro perfil</button>
+            </div>
+          )}
+        </>
+      ) : (
+        /* MODO GENERADOR WEB AI */
+        <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100">
+            <div className="bg-blue-600 p-8 text-white">
+              <h2 className="text-2xl font-bold mb-2">Generador de Prompt Profesional</h2>
+              <p className="opacity-80 text-sm">Completa los datos de tu cliente para generar un prompt optimizado para constructores web con IA.</p>
+            </div>
+            
+            <div className="p-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Columna 1: Identidad y Valor */}
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-blue-600 flex items-center gap-2">
+                      <span className="w-6 h-px bg-blue-200"></span> Identidad del Negocio
+                    </h3>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Nombre del Negocio</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={webFormData.businessName}
+                        onChange={(e) => setWebFormData({...webFormData, businessName: e.target.value})}
+                        placeholder="Ej: Spa Belleza Real"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Contacto Principal</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={webFormData.mainContact}
+                        onChange={(e) => setWebFormData({...webFormData, mainContact: e.target.value})}
+                        placeholder="Nombre del dueño/gerente"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-blue-600 flex items-center gap-2">
+                      <span className="w-6 h-px bg-blue-200"></span> Propuesta de Valor
+                    </h3>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">¿A qué se dedica?</label>
+                      <textarea 
+                        rows={2}
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none text-sm"
+                        value={webFormData.activity}
+                        onChange={(e) => setWebFormData({...webFormData, activity: e.target.value})}
+                        placeholder="Actividad principal..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Servicios Principales</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={webFormData.services}
+                        onChange={(e) => setWebFormData({...webFormData, services: e.target.value})}
+                        placeholder="Ej: Masajes, Faciales, Manicura"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Factor Diferenciador</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={webFormData.differentiator}
+                        onChange={(e) => setWebFormData({...webFormData, differentiator: e.target.value})}
+                        placeholder="¿Por qué elegirlos?"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Objetivos del Negocio</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={webFormData.objectives}
+                        onChange={(e) => setWebFormData({...webFormData, objectives: e.target.value})}
+                        placeholder="Ej: Aumentar citas online"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Columna 2: Canales y Ubicación */}
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-blue-600 flex items-center gap-2">
+                      <span className="w-6 h-px bg-blue-200"></span> Contacto y Canales
+                    </h3>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Ubicación Física</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={webFormData.location}
+                        onChange={(e) => setWebFormData({...webFormData, location: e.target.value})}
+                        placeholder="Ciudad, País"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Instagram (URL)</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={webFormData.instagramUrl}
+                        onChange={(e) => setWebFormData({...webFormData, instagramUrl: e.target.value})}
+                        placeholder="https://instagram.com/..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">WhatsApp (Número)</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={webFormData.whatsapp}
+                        onChange={(e) => setWebFormData({...webFormData, whatsapp: e.target.value})}
+                        placeholder="+57 300..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">Correo Electrónico</label>
+                      <input 
+                        type="email" 
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={webFormData.email}
+                        onChange={(e) => setWebFormData({...webFormData, email: e.target.value})}
+                        placeholder="contacto@empresa.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-10">
+                    <button 
+                      onClick={handleGeneratePrompt}
+                      className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition shadow-lg flex items-center justify-center gap-3"
+                    >
+                      <span>✨</span> Generar Prompt Profesional
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resultado del Prompt */}
+              {generatedPrompt && (
+                <div className="mt-12 animate-in fade-in zoom-in duration-300">
+                  <div className="bg-slate-900 rounded-3xl p-6 relative">
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-blue-400 text-xs font-bold uppercase tracking-widest">Prompt para Web AI Generado</span>
+                      <button 
+                        onClick={copyToClipboard}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2 ${copySuccess ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                      >
+                        {copySuccess ? '¡Copiado!' : 'Copiar al portapapeles'}
+                      </button>
+                    </div>
+                    <textarea 
+                      readOnly
+                      rows={8}
+                      className="w-full bg-transparent text-slate-300 text-sm leading-relaxed border-none focus:ring-0 resize-none font-mono"
+                      value={generatedPrompt}
+                    />
+                  </div>
+                  <p className="text-center text-xs text-slate-400 mt-4">Pega este prompt en el generador de sitios web de Hostinger o ChatGPT para obtener tu estructura profesional.</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
